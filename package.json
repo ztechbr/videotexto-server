@@ -1,0 +1,16 @@
+{
+  "name": "minitel-videotexto-br",
+  "version": "1.0.0",
+  "description": "Servidor de Videotexto/Minitel brasileiro, com terminal telnet/TCP e emulador web embutido.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

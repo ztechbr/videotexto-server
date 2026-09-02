@@ -1,0 +1,306 @@
+# Videotexto Brasil — Minitel / Videotex Server
+
+*Leia em [português](README.md).*
+
+*Written the way an old engineer would explain it — one who spent the
+1980s keeping switching centers and Videotexto terminals alive, back
+when Brazil ran its own cousin of the French Minitel. Pull up a chair,
+we're powering up the central office.*
+
+This is a complete **Videotexto/Minitel server** written in Node.js
+that speaks the same protocol dialect real Minitel/Videotex terminals
+used: direct cursor addressing, 8-color text/background, the G0/G1
+(mosaic) character sets, and accented characters built through
+diacritic composition. It was born out of admiration for
+[minitel-server](https://github.com/BwanaFr/minitel-server) by BwanaFr
+(Python/Pynitel, port 3615) — this is a from-scratch Node.js rewrite,
+with its own set of "pages" (called *quadros*/frames in the original
+Brazilian service) full of examples in the spirit of the Videotexto
+services that ran in Brazil in the early 1980s (Embratel/Telesp):
+electronic newspaper, weather forecast, horoscope, classifieds,
+electronic mail, a simulated bank, chat, games, **a sports page with
+real data** (Brazilian league standings, Formula 1) illustrated with
+classic mosaic-block graphics (trophy, ball, checkered flag), and
+mosaic-art demos.
+
+It serves the exact same content through **two front doors**:
+
+1. **Telnet/TCP port** (default `3615`, a nod to the French dialing
+   code) — for real telnet clients, or for a serial-to-TCP bridge
+   wired up to a physical Minitel/Videotexto terminal.
+2. **Browser-based terminal emulator**, served over HTTP/WebSocket
+   (default port `8080`) — a "Minitel" drawn on an HTML `<canvas>`
+   that decodes the exact same protocol byte stream. This is the
+   quickest way to try everything right after you deploy, with no
+   telnet client or vintage hardware required.
+
+---
+
+## 1. How the protocol works (technical summary)
+
+The server sends a byte stream per connection, exactly as a real
+Videotex/Minitel terminal would expect over a serial line:
+
+| Byte(s)                              | Meaning                                                   |
+|----------------------------------------|-------------------------------------------------------------|
+| `0x0C`                                | Clear the whole screen (Form Feed) and home the cursor      |
+| `0x1F row col`                        | Direct cursor addressing (PDC)                              |
+| `0x0E` / `0x0F`                        | Switch to G1 (mosaic) / G0 (text) character set             |
+| `0x11` / `0x14`                        | Cursor visible on / off                                     |
+| `ESC 0x40..0x47`                       | Text color (0=black ... 7=white)                            |
+| `ESC 0x50..0x57`                       | Background color                                            |
+| `ESC 0x48` / `0x49`                    | Blink on / off                                               |
+| `ESC 0x5A` / `0x59`                    | Underline on / off                                           |
+| `ESC 0x5D` / `0x5C`                    | Inverse video on / off                                       |
+| `ESC 0x4C..0x4F`                       | Size: normal / double-height / double-width / both           |
+| `ESC 0x4A,0x4B,0x58,0x5B,0x5E,0x5F`    | Accent composition (grave, acute, circumflex, tilde, trema, cedilla) + base letter |
+| `0x20-0x7E` in G0                      | Regular text character (ASCII)                               |
+| `0x20-0x5F` in G1                      | Mosaic cell: the byte's 6 bits define the 6 "sub-pixels" (2 columns x 3 rows) of the cell |
+
+This is the **exact same subset** used for both telnet and the web
+emulator — there's no separate "web-only" format. If you plug in a
+real Minitel (through a serial/modem-to-TCP bridge), it should
+understand most of this stream too, since it follows the spirit of the
+real STUM1B/Teletel protocol (this is **not** a fully certified
+implementation of the French standard or of the official Brazilian
+Embratel/Telesp protocol — it's a simplified, educational subset built
+for teaching and demonstration).
+
+### Navigation (same scheme over telnet and in the browser)
+
+| Key / command            | Action                                                |
+|----------------------------|----------------------------------------------------------|
+| `NN` + ENVIO (send)        | Jump straight to service code `NN` (e.g. `01`)           |
+| `S` / CONTINUA (continue)  | Next screen / next edition within a service               |
+| `R` / RETORNO (back)       | Go back to the previous screen (history)                  |
+| `G` / GUIA (guide)         | Show the usage guide                                       |
+| `H` / SUMÁRIO (summary)    | Go back to the main index                                  |
+| Empty ENVIO                | Redraw the current screen                                   |
+| `Q` / FIM (end)            | Close the connection (with a goodbye screen)               |
+
+On pages with a free-text field (mail, chat, bank, quiz), anything you
+type becomes the field's content — to navigate without leaving text
+mode, use the slash commands: `/sumario`, `/guia`, `/volta`,
+`/continua`, `/fim`.
+
+---
+
+## 2. Running locally (without Docker)
+
+Requires Node.js 18 or newer.
+
+```bash
+npm install
+npm start
+```
+
+This starts:
+- the web emulator at `http://localhost:8080`
+- the telnet/TCP server at `localhost:3615`
+
+Quick telnet test:
+
+```bash
+telnet localhost 3615
+```
+
+(On Windows, enable the "Telnet Client" optional feature, or use
+PuTTY in Raw/Telnet mode on port 3615.)
+
+Or just open `http://localhost:8080` in your browser — the fastest
+way to see the terminal actually working.
+
+Accepted environment variables:
+
+| Variable       | Default    | Description                              |
+|----------------|------------|--------------------------------------------|
+| `PORT`         | `8080`     | HTTP port (web emulator + WebSocket at `/ws`) |
+| `TELNET_PORT`  | `3615`     | Telnet/TCP server port                     |
+| `HOST`         | `0.0.0.0`  | Bind address                               |
+
+---
+
+## 3. Running with Docker
+
+```bash
+docker build -t videotexto-brasil .
+docker run --rm -p 8080:8080 -p 3615:3615 videotexto-brasil
+```
+
+Then visit `http://localhost:8080` or `telnet localhost 3615`.
+
+The `Dockerfile` already exposes both ports (`8080` and `3615`), runs
+as a non-root user (`node`), and has a `HEALTHCHECK` hitting `/health`.
+
+---
+
+## 4. Deploying to EasyPanel (step by step)
+
+EasyPanel builds the image straight from the `Dockerfile` in this
+repository, so the process is direct. This section walks through the
+full setup, **including how to open the raw telnet port 3615**.
+
+### 4.1 Deploy the web app (HTTP + WebSocket, port 8080)
+
+1. **Push this project to a Git repository** (GitHub, GitLab, etc.)
+   that EasyPanel can access — or use EasyPanel's own upload/monorepo
+   deploy option if you prefer.
+
+2. In EasyPanel, create a **new "App" service** and pick **"Dockerfile"**
+   as the build source (or "Git" pointing at this repository, with
+   "Build Method: Dockerfile").
+
+3. Under **"Build"**, confirm it picked up the `Dockerfile` at the
+   project root. No build arguments are needed.
+
+4. Under **"Environment"**, you can leave the defaults, or set:
+   - `PORT=8080` (internal HTTP port — no need to change)
+   - `TELNET_PORT=3615` (internal telnet port)
+
+5. Under **"Domains"**, attach a domain (or use EasyPanel's free
+   subdomain) pointing at **container port 8080** — that's the port
+   serving the web emulator, with automatic HTTPS through Traefik.
+   This alone is enough to use the entire server from a browser.
+
+6. Click **Deploy**. EasyPanel builds the image, starts the
+   container, and once the healthcheck at `/health` returns `OK` the
+   service goes live.
+
+7. Open the configured domain — you should see the retro
+   "TERMINAL DE VIDEOTEXTO — MODELO BR-82" screen connecting over
+   WebSocket. Type `01` and ENVIO to jump straight to the electronic
+   newspaper, or `G` for the usage guide.
+
+> **Note on WebSocket behind the proxy:** the WebSocket runs on the
+> same HTTP port (`/ws`), so no extra proxy configuration is needed —
+> EasyPanel's Traefik already upgrades HTTP connections to WebSocket
+> for regular HTTP services automatically.
+
+### 4.2 Opening port 3615 for raw telnet access
+
+The web emulator alone already exposes the whole service — opening
+3615 is only needed if you want **real telnet clients**, or a
+**serial-to-TCP bridge from a physical Minitel/Videotexto terminal**,
+to connect directly, bypassing the browser. EasyPanel's default domain
+proxy (Traefik) only understands HTTP/HTTPS/WebSocket, so a raw TCP
+port like 3615 has to be published separately, straight to the host:
+
+1. Open your app's service page in EasyPanel and go to the
+   **"Advanced"** tab (in some EasyPanel versions this section is
+   simply labeled the port-mapping/exposed-ports area of the service —
+   the exact tab name has moved between panel versions, so look for
+   wherever the panel lets you map a **container port** to a
+   **published/host port**).
+
+2. Add a new port mapping with:
+   - **Container port:** `3615`
+   - **Published/host port:** `3615` (or any free port on the host —
+     just remember to use that port number when connecting)
+   - **Protocol:** `TCP`
+
+3. Save the mapping and **redeploy** the service so the new port
+   mapping takes effect.
+
+4. **Open the port on your server's firewall/security group too.**
+   EasyPanel publishing the port on the container is not enough if
+   the underlying VPS/cloud firewall still blocks inbound traffic on
+   that port:
+   - On a typical Linux firewall (ufw): `sudo ufw allow 3615/tcp`
+   - On cloud providers (Hetzner, DigitalOcean, AWS, etc.), add an
+     inbound rule for TCP port 3615 in the server's firewall/security
+     group settings from the provider's dashboard.
+
+5. Test it from your own machine:
+
+   ```bash
+   telnet your-server-ip 3615
+   ```
+
+   You should immediately see the Videotexto Brasil main menu appear,
+   exactly like the web emulator shows.
+
+> **Security note:** port 3615 as implemented here is a plain,
+> unauthenticated line-mode TCP service meant for demonstration and
+> retro-computing fun — it has no encryption and no login. Treat it
+> like you would any other open telnet port: fine for a hobby/demo
+> deployment, not something you'd want fronting sensitive data.
+
+---
+
+## 5. Project structure
+
+```
+minitel-videotexto-br/
+├── Dockerfile
+├── package.json
+├── src/
+│   ├── server.js              # entry point: starts telnet + web/ws
+│   ├── net/
+│   │   ├── telnetServer.js    # raw TCP server (with telnet IAC filtering)
+│   │   └── webServer.js       # static HTTP + WebSocket (/ws)
+│   ├── videotex/
+│   │   ├── constants.js       # control codes, colors, accents
+│   │   ├── screen.js          # "Screen": builds a page's byte stream
+│   │   └── session.js         # per-connection navigation state machine
+│   └── pages/                 # the Videotexto "frames" (content)
+│       ├── 00-home.js         # main index
+│       ├── 01-noticias.js     # electronic newspaper (multi-edition)
+│       ├── 02-tempo.js        # weather forecast
+│       ├── 03-horoscopo.js    # daily horoscope
+│       ├── 04-classificados.js
+│       ├── 05-correio.js      # electronic mail (text field)
+│       ├── 06-banco.js        # simulated balance/withdraw/deposit
+│       ├── 07-batepapo.js     # simulated chat
+│       ├── 08-jogo.js         # multiple-choice quiz
+│       ├── 09-arte.js         # G1 mosaic-art demonstration
+│       ├── 10-cores.js        # color palette and attribute demo
+│       ├── 11-esportes.js     # sports page with real data + mosaic graphics
+│       ├── sports-art.js      # generates the mosaic drawings (trophy, ball)
+│       └── 99-guia.js         # usage guide
+└── web/
+    ├── index.html             # emulator shell
+    ├── minitel.css            # retro terminal styling
+    └── minitel-emulator.js    # protocol decoder + canvas + WebSocket
+```
+
+### Adding a new page
+
+Every page in `src/pages/` exports an object shaped like this:
+
+```js
+module.exports = {
+  code: '11',               // 2-digit code the user types
+  title: 'MY SERVICE',
+  expectsText: false,       // true if the page has a free-text field
+  onEnter(ctx) {},           // optional: runs once when entering the page
+  onInput(ctx) {},           // optional: runs when ENVIO is sent with content
+  next(ctx) {},              // optional: what CONTINUA (next) should do
+  render(screen, ctx) {
+    screen.clear().reset();
+    screen.goto(2, 1).fg(6).print('HELLO, VIDEOTEXTO!');
+    // ...
+  },
+};
+```
+
+Register the new page in `src/pages/index.js` and it's immediately
+navigable both over telnet and in the web emulator.
+
+---
+
+## 6. Credits and disclaimers
+
+- Inspired by [BwanaFr's minitel-server](https://github.com/BwanaFr/minitel-server),
+  which in turn builds on Christian Quest's Pynitel work.
+- All page content (news, classifieds, bank statements, horoscope,
+  etc.) is **fictional**, created purely for the didactic demonstration
+  of the Videotexto protocol. The one exception is the **11 - Esportes**
+  page, whose data (Brazilian league standings, Formula 1 championship)
+  was real at the time this content was written — it's a static
+  snapshot, not a live API, and will go stale as new rounds are played.
+- This project implements a **simplified subset** of the
+  Videotex/Teletel protocol for educational purposes — it is not a
+  certified implementation of the French STUM1B standard, nor of the
+  official protocol used by Embratel/Telesp in the 1980s.
+
+73, and a warm hello from the green-phosphor days. Happy connecting!

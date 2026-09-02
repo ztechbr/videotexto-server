@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Videotexto Brasil - Terminal Minitel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/minitel.css">
+</head>
+<body>
+  <div class="console">
+    <div class="brand">TERMINAL DE VIDEOTEXTO — MODELO BR-82</div>
+    <div class="screen-frame">
+      <canvas id="tela" width="640" height="600"></canvas>
+    </div>
+
+    <div class="statusbar" id="status">conectando...</div>
+
+    <div class="typebar">
+      <input id="typed" type="text" autocomplete="off" placeholder="digite aqui e pressione ENVIO..." maxlength="60">
+      <button data-cmd="ENVIO" class="key key-envio">ENVIO</button>
+    </div>
+
+    <div class="keys">
+      <button data-cmd="SUMARIO" class="key">SUMÁRIO</button>
+      <button data-cmd="GUIA" class="key">GUIA</button>
+      <button data-cmd="RETORNO" class="key">VOLTA</button>
+      <button data-cmd="SUITE" class="key">CONTINUA</button>
+      <button data-cmd="REPETICAO" class="key">REPETIR</button>
+      <button data-cmd="FIM" class="key key-fim">FIM</button>
+    </div>
+
+    <div class="hint">
+      Atalhos do teclado: ENTER=Envio · ESC=Sumário · TAB=Continua ·
+      F3=Volta · F1=Guia
+    </div>
+  </div>
+  <script src="/minitel-emulator.js"></script>
+</body>
+</html>
