@@ -95,13 +95,16 @@ lê o cache mais recente:
 | `01` Notícias | [Google Notícias RSS](https://news.google.com/rss?hl=pt-BR&gl=BR&ceid=BR:pt-BR) (pt-BR) | Feed público, texto puro, atualizado a cada ~20 min |
 | `02` Tempo | [Open-Meteo](https://open-meteo.com) (API meteorológica pública) | A Climatempo (fonte pedida originalmente) renderiza a previsão em JavaScript no navegador — o HTML que um servidor consegue buscar não contém os números. Open-Meteo entrega os mesmos dados reais em JSON puro |
 | `03` Horóscopo | [horoscope-app-api](https://horoscope-app-api.vercel.app) + tradução via [MyMemory](https://mymemory.translated.net) | A previsão diária da Folha/F5 (fonte pedida originalmente) também é carregada via JavaScript no navegador. Usamos uma API de horóscopo real e traduzimos o texto (inglês → português) automaticamente |
+| `04` Classificados | Preços médios reais publicados pelo próprio blog da OLX ([dicas.olx.com.br](https://dicas.olx.com.br)) | A busca de carros da OLX (fonte pedida originalmente) devolve **HTTP 403** para acesso automatizado, além de carregar os anúncios via JavaScript — só há espaço para uma foto real e datada, não uma busca ao vivo |
 | `11` Esportes | Instantâneo real (Brasileirão, Fórmula 1) escrito no código | Ver aviso na seção 7 — não é buscado ao vivo |
 
-Isso significa: quando as fontes originais (Climatempo, Folha) só
-entregam dados via JavaScript do lado do cliente, e o servidor não tem
-um navegador para executar esse JavaScript, a alternativa honesta é
-usar uma fonte real equivalente que responda em HTTP puro — nunca
-inventar os números.
+Isso significa: quando as fontes originais (Climatempo, Folha, a busca
+da OLX) só entregam dados via JavaScript do lado do cliente — ou
+bloqueiam acesso automatizado, como a OLX — e o servidor não tem um
+navegador para contornar isso, a alternativa honesta é usar uma fonte
+real equivalente que responda em HTTP puro, ou um instantâneo real e
+datado quando não existe equivalente ao vivo. Nunca inventamos os
+números.
 
 Se uma fonte estiver fora do ar, a página mostra "CARREGANDO..." (na
 primeira vez) ou continua exibindo o último dado bom conhecido, sem
@@ -316,23 +319,27 @@ aparece navegável tanto por telnet quanto pelo emulador web.
 
 - Inspirado no projeto [minitel-server de BwanaFr](https://github.com/BwanaFr/minitel-server),
   que por sua vez se apoia no trabalho de Christian Quest (Pynitel).
-- Todo o conteúdo das páginas (notícias, classificados, extrato
-  bancário, horóscopo etc.) é **fictício**, criado apenas para fins de
-  demonstração didática do protocolo de Videotexto. A única exceção é
-  a página **11 - Esportes**, cujos dados (tabela do Brasileirão,
-  classificação da Fórmula 1) foram reais no momento em que o conteúdo
-  foi escrito — é um retrato estático (não uma API ao vivo) e fica
-  desatualizado à medida que as rodadas avançam.
+- As páginas **01** (notícias), **02** (tempo) e **03** (horóscopo)
+  mostram dados reais e ao vivo, buscados das fontes listadas na seção
+  2 — todo o resto (extrato bancário, perguntas do quiz etc.) é
+  **fictício**, criado apenas para fins de demonstração didática do
+  protocolo de Videotexto. As exceções reais-porém-estáticas são a
+  página **04 - Classificados** (preços médios reais publicados pela
+  OLX, não uma busca ao vivo — ver seção 2) e a página **11 -
+  Esportes**, cujos dados (tabela do Brasileirão, classificação da
+  Fórmula 1) foram reais no momento em que o conteúdo foi escrito — um
+  retrato estático que fica desatualizado com o tempo.
 - Este projeto implementa um **subconjunto simplificado** do protocolo
   Videotex/Teletel, com fins educacionais — não é uma implementação
   certificada do padrão STUM1B francês nem do padrão oficial usado
   pela Embratel/Telesp nos anos 80.
-- Dados ao vivo: Google Notícias RSS ("disponibilizado apenas para uso
-  pessoal e não comercial em leitores de feed", conforme o próprio
-  feed), Open-Meteo (API meteorológica aberta), horoscope-app-api e
-  MyMemory (tradução automática). São serviços públicos de terceiros,
-  fora do controle deste projeto — podem mudar ou sair do ar a
-  qualquer momento.
+- Dados ao vivo e reais: Google Notícias RSS ("disponibilizado apenas
+  para uso pessoal e não comercial em leitores de feed", conforme o
+  próprio feed), Open-Meteo (API meteorológica aberta), horoscope-app-api,
+  MyMemory (tradução automática) e o blog dicas.olx.com.br (preços
+  médios de carros usados publicados pela própria OLX). São serviços
+  públicos de terceiros, fora do controle deste projeto — podem mudar
+  ou sair do ar a qualquer momento.
 - `src/videotex/image2mosaic.js` usa a biblioteca [Jimp](https://github.com/jimp-dev/jimp)
   (MIT) para decodificar as imagens.
 

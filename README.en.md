@@ -99,12 +99,15 @@ freshest cached value:
 | `01` News | [Google News RSS](https://news.google.com/rss?hl=pt-BR&gl=BR&ceid=BR:pt-BR) (pt-BR) | Public feed, plain text, refreshed every ~20 min |
 | `02` Weather | [Open-Meteo](https://open-meteo.com) (public weather API) | Climatempo (the originally requested source) renders its forecast in client-side JavaScript — the HTML a server can fetch doesn't contain the numbers. Open-Meteo serves the same kind of real data as plain JSON |
 | `03` Horoscope | [horoscope-app-api](https://horoscope-app-api.vercel.app) + translation via [MyMemory](https://mymemory.translated.net) | Folha/F5's daily horoscope (the originally requested source) is also loaded via client-side JavaScript. We use a real horoscope API instead and machine-translate the text (English → Portuguese) automatically |
+| `04` Classifieds | Real average prices published by OLX's own blog ([dicas.olx.com.br](https://dicas.olx.com.br)) | OLX's car search (the originally requested source) returns **HTTP 403** to automated access, on top of loading listings via JavaScript — the honest option is a real, dated snapshot, not a live search |
 | `11` Sports | Real snapshot (Brazilian league, Formula 1) written into the code | See the disclaimer in section 7 — not fetched live |
 
-In short: when the original sources (Climatempo, Folha) only serve
-data through client-side JavaScript, and the server has no browser to
-run that JavaScript, the honest alternative is to use an equivalent
-real source that answers plain HTTP — never to fabricate the numbers.
+In short: when the original sources (Climatempo, Folha, OLX's search)
+only serve data through client-side JavaScript — or block automated
+access outright, like OLX — and the server has no browser to work
+around that, the honest alternative is either an equivalent real
+source that answers plain HTTP, or a real, dated snapshot when no live
+equivalent exists. We never fabricate the numbers.
 
 If a source is down, the page shows "CARREGANDO..." (loading, on the
 very first boot) or keeps showing the last known-good data, without
@@ -361,22 +364,25 @@ navigable both over telnet and in the web emulator.
   which in turn builds on Christian Quest's Pynitel work.
 - Pages **01** (news), **02** (weather), and **03** (horoscope) show
   real, live data fetched from the public sources listed in section 2
-  — everything else (classifieds, bank statements, quiz questions,
-  etc.) is **fictional**, created purely for the didactic demonstration
-  of the Videotexto protocol. The one static-but-real exception is the
-  **11 - Esportes** page, whose data (Brazilian league standings,
-  Formula 1 championship) was real at the time this content was
-  written — it's a snapshot baked into the code, not a live fetch, and
-  will go stale as new rounds are played.
+  — everything else (bank statements, quiz questions, etc.) is
+  **fictional**, created purely for the didactic demonstration of the
+  Videotexto protocol. The real-but-static exceptions are page **04 -
+  Classificados** (real average prices published by OLX, not a live
+  search — see section 2) and page **11 - Esportes**, whose data
+  (Brazilian league standings, Formula 1 championship) was real at the
+  time this content was written — a snapshot baked into the code that
+  will go stale over time.
 - This project implements a **simplified subset** of the
   Videotex/Teletel protocol for educational purposes — it is not a
   certified implementation of the French STUM1B standard, nor of the
   official protocol used by Embratel/Telesp in the 1980s.
-- Live data credits: Google News RSS ("made available solely for...
-  personal, non-commercial use" in a feed reader, per the feed's own
-  copyright notice), Open-Meteo (open weather API), horoscope-app-api,
-  and MyMemory (machine translation). These are third-party public
-  services outside this project's control — they may change or go
+- Live/real data credits: Google News RSS ("made available solely
+  for... personal, non-commercial use" in a feed reader, per the
+  feed's own copyright notice), Open-Meteo (open weather API),
+  horoscope-app-api, MyMemory (machine translation), and the
+  dicas.olx.com.br blog (average used-car prices published by OLX
+  itself). These are third-party public services outside this
+  project's control — they may change or go
   down at any time.
 - `src/videotex/image2mosaic.js` uses the [Jimp](https://github.com/jimp-dev/jimp)
   library (MIT) to decode images.

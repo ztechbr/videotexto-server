@@ -19,7 +19,7 @@ module.exports = {
     menuItem(screen, 6, '01', 'Jornal Eletronico (noticias ao vivo)');
     menuItem(screen, 7, '02', 'Previsao do Tempo (dados ao vivo)');
     menuItem(screen, 8, '03', 'Horoscopo do Dia (previsao ao vivo)');
-    menuItem(screen, 9, '04', 'Classificados');
+    menuItem(screen, 9, '04', 'Classificados (precos reais OLX)');
     menuItem(screen, 10, '05', 'Correio Eletronico');
     menuItem(screen, 11, '06', 'Banco Videotexto (extrato)');
     menuItem(screen, 12, '07', 'Bate-Papo (chat real, sala unica)');
