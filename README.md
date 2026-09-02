@@ -14,11 +14,13 @@ composição de diacríticos). Ele nasceu inspirado no
 (Python/Pynitel, porta 3615) — aqui está reescrito do zero em Node.js,
 com um conjunto próprio de "quadros" (páginas) recheados de exemplos
 no espírito dos serviços de Videotexto que rodaram no Brasil no início
-dos anos 80 (Embratel/Telesp): jornal eletrônico, previsão do tempo,
-horóscopo, classificados, correio eletrônico, banco, bate-papo, jogos,
-**esportes com dados reais** (Brasileirão, Fórmula 1) ilustrados com
-gráficos em blocos mosaico clássicos (troféu, bola, bandeira
-quadriculada) e demonstrações de arte em mosaico.
+dos anos 80 (Embratel/Telesp): jornal eletrônico, previsão do tempo e
+horóscopo **com dados reais e ao vivo**, classificados, correio
+eletrônico, banco, um **bate-papo multiusuário de verdade** (sala
+única, mensagens transmitidas em tempo real para todo mundo
+conectado), jogos, esportes com dados reais (Brasileirão, Fórmula 1)
+e demonstrações de arte em mosaico — incluindo um conversor de imagens
+PNG/JPEG/GIF reais em blocos de mosaico Videotex.
 
 Ele fornece **duas portas de entrada** para o mesmo conteúdo:
 
@@ -81,7 +83,54 @@ sair do modo texto, use os comandos com barra: `/sumario`, `/guia`,
 
 ---
 
-## 2. Rodando localmente (sem Docker)
+## 2. Dados ao vivo e bate-papo real
+
+Três páginas buscam dados reais em segundo plano assim que o servidor
+sobe (e depois periodicamente), guardando o último resultado bom
+conhecido em memória — a tela nunca fica esperando a rede, ela sempre
+lê o cache mais recente:
+
+| Página | Fonte real usada | Por quê |
+|---|---|---|
+| `01` Notícias | [Google Notícias RSS](https://news.google.com/rss?hl=pt-BR&gl=BR&ceid=BR:pt-BR) (pt-BR) | Feed público, texto puro, atualizado a cada ~20 min |
+| `02` Tempo | [Open-Meteo](https://open-meteo.com) (API meteorológica pública) | A Climatempo (fonte pedida originalmente) renderiza a previsão em JavaScript no navegador — o HTML que um servidor consegue buscar não contém os números. Open-Meteo entrega os mesmos dados reais em JSON puro |
+| `03` Horóscopo | [horoscope-app-api](https://horoscope-app-api.vercel.app) + tradução via [MyMemory](https://mymemory.translated.net) | A previsão diária da Folha/F5 (fonte pedida originalmente) também é carregada via JavaScript no navegador. Usamos uma API de horóscopo real e traduzimos o texto (inglês → português) automaticamente |
+| `11` Esportes | Instantâneo real (Brasileirão, Fórmula 1) escrito no código | Ver aviso na seção 7 — não é buscado ao vivo |
+
+Isso significa: quando as fontes originais (Climatempo, Folha) só
+entregam dados via JavaScript do lado do cliente, e o servidor não tem
+um navegador para executar esse JavaScript, a alternativa honesta é
+usar uma fonte real equivalente que responda em HTTP puro — nunca
+inventar os números.
+
+Se uma fonte estiver fora do ar, a página mostra "CARREGANDO..." (na
+primeira vez) ou continua exibindo o último dado bom conhecido, sem
+travar o terminal.
+
+### Bate-papo real (página `07`)
+
+A sala de bate-papo é **compartilhada entre todas as conexões ativas**
+(telnet e navegador ao mesmo tempo) — não é uma simulação local. Quando
+alguém entra, sai ou envia uma mensagem, o servidor **transmite (broadcast)
+a tela atualizada para todo mundo que estiver na sala**, na hora, sem
+precisar apertar ENVIO. É implementado em `session.js` com um registro
+de "salas" (`rooms`) por página — qualquer página pode declarar
+`room: 'nome'` para ganhar esse comportamento.
+
+### Conversor de imagem para mosaico Videotex
+
+`src/videotex/image2mosaic.js` converte um arquivo PNG, JPEG, BMP ou
+GIF (primeiro quadro) real em blocos de mosaico Videotex de verdade —
+cada célula de tela vira um bloco de 2x3 sub-pixels com até 2 cores da
+paleta de 8 cores do protocolo, exatamente como um artista de Minitel
+faria à mão. A página `09` (Arte em Mosaico, edição 2/2) mostra isso
+funcionando com uma imagem de exemplo em `assets/sample-logo.png`.
+Use `imageToMosaic(caminhoOuBuffer, colunas, linhas)` e depois
+`screen.mosaicImage(linha, coluna, celulas)` para desenhar o resultado.
+
+---
+
+## 3. Rodando localmente (sem Docker)
 
 Requer Node.js 18 ou mais novo.
 
@@ -116,7 +165,7 @@ Variáveis de ambiente aceitas:
 
 ---
 
-## 3. Rodando com Docker
+## 4. Rodando com Docker
 
 ```bash
 docker build -t videotexto-brasil .
@@ -130,7 +179,7 @@ usuário não-root (`node`) e tem `HEALTHCHECK` batendo em `/health`.
 
 ---
 
-## 4. Deploy no EasyPanel (passo a passo)
+## 5. Deploy no EasyPanel (passo a passo)
 
 O EasyPanel constrói a imagem a partir do `Dockerfile` do repositório,
 então o processo é direto:
@@ -180,34 +229,52 @@ então o processo é direto:
 > necessária — o Traefik do EasyPanel já faz upgrade de conexão
 > HTTP→WebSocket automaticamente para serviços HTTP comuns.
 
+> **Nota sobre acesso à internet:** as páginas de notícias, tempo e
+> horóscopo (seção 2) buscam dados reais em APIs públicas externas via
+> HTTPS de saída. Containers do EasyPanel têm acesso de saída à
+> internet por padrão, então normalmente nenhuma configuração extra é
+> necessária — mas se essas páginas ficarem presas em "CARREGANDO...",
+> verifique se o serviço não está atrás de algum firewall/egress
+> bloqueando conexões HTTPS de saída.
+
 ---
 
-## 5. Estrutura do projeto
+## 6. Estrutura do projeto
 
 ```
 minitel-videotexto-br/
 ├── Dockerfile
 ├── package.json
+├── assets/
+│   └── sample-logo.png        # imagem de exemplo p/ o conversor de mosaico
 ├── src/
-│   ├── server.js              # ponto de entrada: sobe telnet + web/ws
+│   ├── server.js              # ponto de entrada: sobe telnet + web/ws + cache de dados
 │   ├── net/
 │   │   ├── telnetServer.js    # servidor TCP bruto (com filtro de IAC telnet)
 │   │   └── webServer.js       # HTTP estático + WebSocket (/ws)
 │   ├── videotex/
 │   │   ├── constants.js       # códigos de controle, cores, acentos
 │   │   ├── screen.js          # "Screen": monta o fluxo de bytes de um quadro
-│   │   └── session.js         # máquina de estados de navegação por conexão
+│   │   ├── session.js         # máquina de estados de navegação + salas compartilhadas
+│   │   └── image2mosaic.js    # converte PNG/JPEG/BMP/GIF em blocos de mosaico
+│   ├── data/                  # busca e cache de dados reais em segundo plano
+│   │   ├── cache.js           # cache generico com atualizacao em background
+│   │   ├── noticias.js        # Google Noticias RSS
+│   │   ├── tempo.js           # Open-Meteo (previsao real)
+│   │   ├── horoscopo.js       # horoscope-app-api + traducao MyMemory
+│   │   ├── logo.js            # converte assets/sample-logo.png uma vez, em cache
+│   │   └── util.js            # unescape de HTML, quebra de linha, texto seguro p/ terminal
 │   └── pages/                 # os "quadros" de Videotexto (conteúdo)
 │       ├── 00-home.js         # sumário / índice
-│       ├── 01-noticias.js     # jornal eletrônico (multi-edição)
-│       ├── 02-tempo.js        # previsão do tempo
-│       ├── 03-horoscopo.js    # horóscopo do dia
+│       ├── 01-noticias.js     # jornal eletrônico (dados reais, multi-edição)
+│       ├── 02-tempo.js        # previsão do tempo (dados reais)
+│       ├── 03-horoscopo.js    # horóscopo do dia (dados reais, traduzido)
 │       ├── 04-classificados.js
 │       ├── 05-correio.js      # correio eletrônico (campo de texto)
 │       ├── 06-banco.js        # extrato/saque/depósito simulados
-│       ├── 07-batepapo.js     # bate-papo simulado
+│       ├── 07-batepapo.js     # bate-papo REAL multiusuário (sala compartilhada)
 │       ├── 08-jogo.js         # quiz de múltipla escolha
-│       ├── 09-arte.js         # demonstração de arte em mosaico G1
+│       ├── 09-arte.js         # arte em mosaico G1 (logo à mão + PNG real convertido)
 │       ├── 10-cores.js        # paleta de cores e atributos
 │       ├── 11-esportes.js     # esportes com dados reais + gráficos em mosaico
 │       ├── sports-art.js      # gera os desenhos (troféu, bola) em mosaico
@@ -227,7 +294,9 @@ module.exports = {
   code: '11',              // código de 2 dígitos digitado pelo usuário
   title: 'MEU SERVICO',
   expectsText: false,      // true se a página tem campo de texto livre
+  room: undefined,         // opcional: nome de uma sala (ex: 'chat') p/ ligar broadcast em tempo real
   onEnter(ctx) {},          // opcional: roda 1x ao entrar na página
+  onLeave(ctx) {},          // opcional: roda 1x ao sair (so faz sentido com `room`)
   onInput(ctx) {},          // opcional: roda ao receber ENVIO com conteúdo
   next(ctx) {},             // opcional: o que fazer com a tecla CONTINUA
   render(screen, ctx) {
@@ -243,7 +312,7 @@ aparece navegável tanto por telnet quanto pelo emulador web.
 
 ---
 
-## 6. Créditos e avisos
+## 7. Créditos e avisos
 
 - Inspirado no projeto [minitel-server de BwanaFr](https://github.com/BwanaFr/minitel-server),
   que por sua vez se apoia no trabalho de Christian Quest (Pynitel).
@@ -258,5 +327,13 @@ aparece navegável tanto por telnet quanto pelo emulador web.
   Videotex/Teletel, com fins educacionais — não é uma implementação
   certificada do padrão STUM1B francês nem do padrão oficial usado
   pela Embratel/Telesp nos anos 80.
+- Dados ao vivo: Google Notícias RSS ("disponibilizado apenas para uso
+  pessoal e não comercial em leitores de feed", conforme o próprio
+  feed), Open-Meteo (API meteorológica aberta), horoscope-app-api e
+  MyMemory (tradução automática). São serviços públicos de terceiros,
+  fora do controle deste projeto — podem mudar ou sair do ar a
+  qualquer momento.
+- `src/videotex/image2mosaic.js` usa a biblioteca [Jimp](https://github.com/jimp-dev/jimp)
+  (MIT) para decodificar as imagens.
 
 73 e um abraço do tempo do fósforo verde. Boas conexões!

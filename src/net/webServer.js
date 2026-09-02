@@ -68,6 +68,7 @@ function startWebServer(port, host = '0.0.0.0') {
       session.handleEvent(evt);
     });
 
+    ws.on('close', () => session.disconnect());
     ws.on('error', () => {});
   });
 

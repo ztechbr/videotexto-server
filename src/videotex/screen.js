@@ -118,6 +118,32 @@ class Screen {
   }
 
   /**
+   * Desenha uma imagem multicolorida em mosaico, celula por celula, a
+   * partir da saida de `image2mosaic.imageToMosaic()`. Ao contrario de
+   * `mosaicArt` (uma unica cor de traço/fundo para o desenho todo), aqui
+   * cada celula pode ter seu proprio par fg/bg - e assim que uma foto ou
+   * logotipo digitalizado aparecia num terminal Videotex de verdade.
+   * So emite os codigos de cor quando eles mudam de uma celula para a
+   * proxima, para nao desperdiçar bytes na linha (que no Videotexto real
+   * custavam caro, a 1200 bps).
+   */
+  mosaicImage(row, col, cells) {
+    let curFg = -1, curBg = -1;
+    for (let r = 0; r < cells.length; r++) {
+      this.goto(row + r, col);
+      this.alphaG1();
+      for (let c = 0; c < cells[r].length; c++) {
+        const cell = cells[r][c];
+        if (cell.fg !== curFg) { this.fg(cell.fg); curFg = cell.fg; }
+        if (cell.bg !== curBg) { this.bg(cell.bg); curBg = cell.bg; }
+        this._b(0x20 + cell.mask);
+      }
+      this.alphaG0();
+    }
+    return this;
+  }
+
+  /**
    * Desenha uma "imagem" em mosaico Minitel a partir de uma matriz de pixels
    * 0/1 (array de strings, cada caractere '1' ou '0'/'.'). A matriz deve ter
    * altura múltipla de 3 e largura múltipla de 2 — exatamente a resolução de

@@ -6,6 +6,40 @@ const { getPage, HOME_CODE, GUIDE_CODE } = require('../pages');
 const MAX_HISTORY = 30;
 
 /**
+ * Salas compartilhadas entre sessoes (ex.: o bate-papo). Ao contrario de
+ * `vars` (privado por sessao), uma sala e um Set de sessoes conectadas
+ * simultaneamente a mesma pagina - usado para transmitir (broadcast) uma
+ * tela atualizada para todo mundo que estiver nela, em tempo real.
+ */
+const rooms = new Map(); // nome da sala -> Set<Session>
+
+function joinRoom(room, session) {
+  if (!rooms.has(room)) rooms.set(room, new Set());
+  rooms.get(room).add(session);
+}
+
+function leaveRoom(room, session) {
+  const set = rooms.get(room);
+  if (!set) return;
+  set.delete(session);
+  if (set.size === 0) rooms.delete(room);
+}
+
+function roomSize(room) {
+  const set = rooms.get(room);
+  return set ? set.size : 0;
+}
+
+/** Redesenha a tela atual de todas as sessoes na sala, exceto (opcionalmente) uma. */
+function broadcastRoom(room, exceptSession) {
+  const set = rooms.get(room);
+  if (!set) return;
+  for (const s of set) {
+    if (s !== exceptSession) s._renderCurrent();
+  }
+}
+
+/**
  * Uma sessao representa uma "conexao" ao servidor de Videotexto,
  * independente do transporte (telnet/TCP ou WebSocket do emulador web).
  * Ela guarda a pagina atual, o historico de navegacao (para RETORNO) e
@@ -23,7 +57,9 @@ class Session {
   }
 
   _ctx(extra = {}) {
-    return { vars: this.vars, userName: this.userName, ...extra };
+    const page = getPage(this.currentCode);
+    const roomN = page && page.room ? roomSize(page.room) : 0;
+    return { vars: this.vars, userName: this.userName, roomSize: roomN, ...extra };
   }
 
   _renderCurrent() {
@@ -34,15 +70,37 @@ class Session {
   }
 
   _navigate(code, { pushHistory = true } = {}) {
-    const page = getPage(code);
-    if (!page) return this._showError(`SERVICO ${code} INEXISTENTE.`);
-    if (pushHistory && this.currentCode && this.currentCode !== code) {
+    const targetPage = getPage(code);
+    if (!targetPage) return this._showError(`SERVICO ${code} INEXISTENTE.`);
+
+    if (code === this.currentCode) return this._renderCurrent();
+
+    const oldPage = getPage(this.currentCode);
+    if (oldPage && oldPage.room) {
+      leaveRoom(oldPage.room, this);
+      if (oldPage.onLeave) oldPage.onLeave(this._ctx());
+      broadcastRoom(oldPage.room, this);
+    }
+
+    if (pushHistory && this.currentCode) {
       this.history.push(this.currentCode);
       if (this.history.length > MAX_HISTORY) this.history.shift();
     }
     this.currentCode = code;
-    if (page.onEnter) page.onEnter(this._ctx());
+    if (targetPage.room) joinRoom(targetPage.room, this);
+    if (targetPage.onEnter) targetPage.onEnter(this._ctx());
     this._renderCurrent();
+    if (targetPage.room) broadcastRoom(targetPage.room, this);
+  }
+
+  /** Chamado pelo transporte (telnet/WebSocket) quando a conexao cai. */
+  disconnect() {
+    const page = getPage(this.currentCode);
+    if (page && page.room) {
+      leaveRoom(page.room, this);
+      if (page.onLeave) page.onLeave(this._ctx());
+      broadcastRoom(page.room, this);
+    }
   }
 
   _showError(msg) {
@@ -141,7 +199,9 @@ class Session {
     const page = getPage(this.currentCode);
     if (page && (page.expectsText || page.onInput)) {
       if (page.onInput) page.onInput(this._ctx({ inputText: text }));
-      return this._renderCurrent();
+      this._renderCurrent();
+      if (page.room) broadcastRoom(page.room, this);
+      return;
     }
 
     // Palavras de atalho tambem funcionam sem a barra fora de paginas de texto livre.

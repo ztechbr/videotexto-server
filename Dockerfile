@@ -10,6 +10,7 @@ RUN npm install --omit=dev --no-audit --no-fund
 # Copia o restante do codigo-fonte
 COPY src ./src
 COPY web ./web
+COPY assets ./assets
 
 ENV NODE_ENV=production \
     PORT=8080 \

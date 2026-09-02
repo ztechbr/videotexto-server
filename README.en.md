@@ -17,11 +17,13 @@ diacritic composition. It was born out of admiration for
 with its own set of "pages" (called *quadros*/frames in the original
 Brazilian service) full of examples in the spirit of the Videotexto
 services that ran in Brazil in the early 1980s (Embratel/Telesp):
-electronic newspaper, weather forecast, horoscope, classifieds,
-electronic mail, a simulated bank, chat, games, **a sports page with
-real data** (Brazilian league standings, Formula 1) illustrated with
-classic mosaic-block graphics (trophy, ball, checkered flag), and
-mosaic-art demos.
+an electronic newspaper, weather forecast, and horoscope **backed by
+real, live data**, classifieds, electronic mail, a simulated bank, a
+**genuine multi-user chat** (single shared room, messages broadcast to
+everyone connected in real time), games, a sports page with real data
+(Brazilian league standings, Formula 1) illustrated with classic
+mosaic-block graphics, and mosaic-art demos — including a converter
+that turns real PNG/JPEG/GIF images into Videotex mosaic blocks.
 
 It serves the exact same content through **two front doors**:
 
@@ -85,7 +87,53 @@ mode, use the slash commands: `/sumario`, `/guia`, `/volta`,
 
 ---
 
-## 2. Running locally (without Docker)
+## 2. Live data and real chat
+
+Three pages fetch real data in the background as soon as the server
+boots (and periodically afterward), keeping the last known-good result
+in memory — the screen never waits on the network, it always reads the
+freshest cached value:
+
+| Page | Real source used | Why |
+|---|---|---|
+| `01` News | [Google News RSS](https://news.google.com/rss?hl=pt-BR&gl=BR&ceid=BR:pt-BR) (pt-BR) | Public feed, plain text, refreshed every ~20 min |
+| `02` Weather | [Open-Meteo](https://open-meteo.com) (public weather API) | Climatempo (the originally requested source) renders its forecast in client-side JavaScript — the HTML a server can fetch doesn't contain the numbers. Open-Meteo serves the same kind of real data as plain JSON |
+| `03` Horoscope | [horoscope-app-api](https://horoscope-app-api.vercel.app) + translation via [MyMemory](https://mymemory.translated.net) | Folha/F5's daily horoscope (the originally requested source) is also loaded via client-side JavaScript. We use a real horoscope API instead and machine-translate the text (English → Portuguese) automatically |
+| `11` Sports | Real snapshot (Brazilian league, Formula 1) written into the code | See the disclaimer in section 7 — not fetched live |
+
+In short: when the original sources (Climatempo, Folha) only serve
+data through client-side JavaScript, and the server has no browser to
+run that JavaScript, the honest alternative is to use an equivalent
+real source that answers plain HTTP — never to fabricate the numbers.
+
+If a source is down, the page shows "CARREGANDO..." (loading, on the
+very first boot) or keeps showing the last known-good data, without
+ever freezing the terminal.
+
+### Real chat (page `07`)
+
+The chat room is **shared across every active connection** (telnet and
+browser clients alike, at the same time) — it's not a local
+simulation. When someone joins, leaves, or sends a message, the server
+**broadcasts the updated screen to everyone in the room** immediately,
+with no need to press ENVIO. It's implemented in `session.js` via a
+per-page "room" registry — any page can opt in with `room: 'name'` to
+get this behavior.
+
+### Image-to-mosaic converter
+
+`src/videotex/image2mosaic.js` converts a real PNG, JPEG, BMP, or GIF
+(first frame) file into genuine Videotex mosaic blocks — each screen
+cell becomes a 2x3 sub-pixel block with up to 2 colors from the
+protocol's 8-color palette, the same way a Minitel artist would
+digitize an image by hand. Page `09` (Mosaic Art, edition 2/2)
+demonstrates this live with a sample image at
+`assets/sample-logo.png`. Use `imageToMosaic(pathOrBuffer, cols, rows)`
+and then `screen.mosaicImage(row, col, cells)` to draw the result.
+
+---
+
+## 3. Running locally (without Docker)
 
 Requires Node.js 18 or newer.
 
@@ -120,7 +168,7 @@ Accepted environment variables:
 
 ---
 
-## 3. Running with Docker
+## 4. Running with Docker
 
 ```bash
 docker build -t videotexto-brasil .
@@ -134,13 +182,13 @@ as a non-root user (`node`), and has a `HEALTHCHECK` hitting `/health`.
 
 ---
 
-## 4. Deploying to EasyPanel (step by step)
+## 5. Deploying to EasyPanel (step by step)
 
 EasyPanel builds the image straight from the `Dockerfile` in this
 repository, so the process is direct. This section walks through the
 full setup, **including how to open the raw telnet port 3615**.
 
-### 4.1 Deploy the web app (HTTP + WebSocket, port 8080)
+### 5.1 Deploy the web app (HTTP + WebSocket, port 8080)
 
 1. **Push this project to a Git repository** (GitHub, GitLab, etc.)
    that EasyPanel can access — or use EasyPanel's own upload/monorepo
@@ -176,7 +224,7 @@ full setup, **including how to open the raw telnet port 3615**.
 > EasyPanel's Traefik already upgrades HTTP connections to WebSocket
 > for regular HTTP services automatically.
 
-### 4.2 Opening port 3615 for raw telnet access
+### 5.2 Opening port 3615 for raw telnet access
 
 The web emulator alone already exposes the whole service — opening
 3615 is only needed if you want **real telnet clients**, or a
@@ -225,34 +273,51 @@ port like 3615 has to be published separately, straight to the host:
 > like you would any other open telnet port: fine for a hobby/demo
 > deployment, not something you'd want fronting sensitive data.
 
+> **Note on internet access:** the news, weather, and horoscope pages
+> (section 2) fetch real data from external public APIs over outbound
+> HTTPS. EasyPanel containers have outbound internet access by
+> default, so this usually needs no extra configuration — but if those
+> pages get stuck on "CARREGANDO...", check whether the service sits
+> behind a firewall/egress policy blocking outbound HTTPS.
+
 ---
 
-## 5. Project structure
+## 6. Project structure
 
 ```
 minitel-videotexto-br/
 ├── Dockerfile
 ├── package.json
+├── assets/
+│   └── sample-logo.png        # sample image for the mosaic converter
 ├── src/
-│   ├── server.js              # entry point: starts telnet + web/ws
+│   ├── server.js              # entry point: starts telnet + web/ws + data cache
 │   ├── net/
 │   │   ├── telnetServer.js    # raw TCP server (with telnet IAC filtering)
 │   │   └── webServer.js       # static HTTP + WebSocket (/ws)
 │   ├── videotex/
 │   │   ├── constants.js       # control codes, colors, accents
 │   │   ├── screen.js          # "Screen": builds a page's byte stream
-│   │   └── session.js         # per-connection navigation state machine
+│   │   ├── session.js         # per-connection state machine + shared rooms
+│   │   └── image2mosaic.js    # converts PNG/JPEG/BMP/GIF into mosaic blocks
+│   ├── data/                  # background fetching and caching of real data
+│   │   ├── cache.js           # generic cache with background refresh
+│   │   ├── noticias.js        # Google News RSS
+│   │   ├── tempo.js           # Open-Meteo (real weather)
+│   │   ├── horoscopo.js       # horoscope-app-api + MyMemory translation
+│   │   ├── logo.js            # converts assets/sample-logo.png once, cached
+│   │   └── util.js            # HTML unescaping, word wrap, terminal-safe text
 │   └── pages/                 # the Videotexto "frames" (content)
 │       ├── 00-home.js         # main index
-│       ├── 01-noticias.js     # electronic newspaper (multi-edition)
-│       ├── 02-tempo.js        # weather forecast
-│       ├── 03-horoscopo.js    # daily horoscope
+│       ├── 01-noticias.js     # electronic newspaper (real data, multi-edition)
+│       ├── 02-tempo.js        # weather forecast (real data)
+│       ├── 03-horoscopo.js    # daily horoscope (real data, translated)
 │       ├── 04-classificados.js
 │       ├── 05-correio.js      # electronic mail (text field)
 │       ├── 06-banco.js        # simulated balance/withdraw/deposit
-│       ├── 07-batepapo.js     # simulated chat
+│       ├── 07-batepapo.js     # REAL multi-user chat (shared room)
 │       ├── 08-jogo.js         # multiple-choice quiz
-│       ├── 09-arte.js         # G1 mosaic-art demonstration
+│       ├── 09-arte.js         # G1 mosaic art (hand-drawn logo + real PNG converted)
 │       ├── 10-cores.js        # color palette and attribute demo
 │       ├── 11-esportes.js     # sports page with real data + mosaic graphics
 │       ├── sports-art.js      # generates the mosaic drawings (trophy, ball)
@@ -272,7 +337,9 @@ module.exports = {
   code: '11',               // 2-digit code the user types
   title: 'MY SERVICE',
   expectsText: false,       // true if the page has a free-text field
+  room: undefined,          // optional: a room name (e.g. 'chat') to enable live broadcast
   onEnter(ctx) {},           // optional: runs once when entering the page
+  onLeave(ctx) {},           // optional: runs once when leaving (only useful with `room`)
   onInput(ctx) {},           // optional: runs when ENVIO is sent with content
   next(ctx) {},              // optional: what CONTINUA (next) should do
   render(screen, ctx) {
@@ -288,19 +355,30 @@ navigable both over telnet and in the web emulator.
 
 ---
 
-## 6. Credits and disclaimers
+## 7. Credits and disclaimers
 
 - Inspired by [BwanaFr's minitel-server](https://github.com/BwanaFr/minitel-server),
   which in turn builds on Christian Quest's Pynitel work.
-- All page content (news, classifieds, bank statements, horoscope,
+- Pages **01** (news), **02** (weather), and **03** (horoscope) show
+  real, live data fetched from the public sources listed in section 2
+  — everything else (classifieds, bank statements, quiz questions,
   etc.) is **fictional**, created purely for the didactic demonstration
-  of the Videotexto protocol. The one exception is the **11 - Esportes**
-  page, whose data (Brazilian league standings, Formula 1 championship)
-  was real at the time this content was written — it's a static
-  snapshot, not a live API, and will go stale as new rounds are played.
+  of the Videotexto protocol. The one static-but-real exception is the
+  **11 - Esportes** page, whose data (Brazilian league standings,
+  Formula 1 championship) was real at the time this content was
+  written — it's a snapshot baked into the code, not a live fetch, and
+  will go stale as new rounds are played.
 - This project implements a **simplified subset** of the
   Videotex/Teletel protocol for educational purposes — it is not a
   certified implementation of the French STUM1B standard, nor of the
   official protocol used by Embratel/Telesp in the 1980s.
+- Live data credits: Google News RSS ("made available solely for...
+  personal, non-commercial use" in a feed reader, per the feed's own
+  copyright notice), Open-Meteo (open weather API), horoscope-app-api,
+  and MyMemory (machine translation). These are third-party public
+  services outside this project's control — they may change or go
+  down at any time.
+- `src/videotex/image2mosaic.js` uses the [Jimp](https://github.com/jimp-dev/jimp)
+  library (MIT) to decode images.
 
 73, and a warm hello from the green-phosphor days. Happy connecting!

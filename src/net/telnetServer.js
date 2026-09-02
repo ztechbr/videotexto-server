@@ -59,6 +59,7 @@ function startTelnetServer(port, host = '0.0.0.0') {
       }
     });
 
+    socket.on('close', () => session.disconnect());
     socket.on('error', () => {});
   });
 

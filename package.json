@@ -8,6 +8,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "jimp": "^0.22.12",
     "ws": "^8.18.0"
   },
   "engines": {

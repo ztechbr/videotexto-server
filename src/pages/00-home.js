@@ -16,13 +16,13 @@ module.exports = {
     screen.goto(4, 1); screen.fg(7);
     screen.print('Digite o codigo do servico e ENVIO:');
 
-    menuItem(screen, 6, '01', 'Jornal Eletronico (Noticias)');
-    menuItem(screen, 7, '02', 'Previsao do Tempo');
-    menuItem(screen, 8, '03', 'Horoscopo do Dia');
+    menuItem(screen, 6, '01', 'Jornal Eletronico (noticias ao vivo)');
+    menuItem(screen, 7, '02', 'Previsao do Tempo (dados ao vivo)');
+    menuItem(screen, 8, '03', 'Horoscopo do Dia (previsao ao vivo)');
     menuItem(screen, 9, '04', 'Classificados');
     menuItem(screen, 10, '05', 'Correio Eletronico');
     menuItem(screen, 11, '06', 'Banco Videotexto (extrato)');
-    menuItem(screen, 12, '07', 'Bate-Papo (Chat)');
+    menuItem(screen, 12, '07', 'Bate-Papo (chat real, sala unica)');
     menuItem(screen, 13, '08', 'Jogos e Quiz');
     menuItem(screen, 14, '09', 'Arte em Mosaico');
     menuItem(screen, 15, '10', 'Paleta de Cores e Atributos');
